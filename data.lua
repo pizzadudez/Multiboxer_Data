@@ -1,0 +1,3 @@
+local addonName, addonTable = ...
+
+addonTable[1].xxx = {}

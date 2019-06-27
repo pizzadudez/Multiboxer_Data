@@ -1,0 +1,15 @@
+## Title: Multiboxer_Data
+## Notes: Collects invetory and profession ranks data for each character
+## Version: 8.2.0
+## Author: PizzaDudeZ
+## Interface: 82000
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+
+Libs\AceAddon-3.0\AceAddon-3.0.xml
+Libs\AceEvent-3.0\AceEvent-3.0.xml
+Libs\StdUi\StdUi.xml
+
+main.lua
+data.lua
