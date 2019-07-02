@@ -3,6 +3,7 @@
 ## Version: 8.2.0
 ## Author: PizzaDudeZ
 ## Interface: 82000
+## SavedVariables: Multiboxer_DataDB
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
