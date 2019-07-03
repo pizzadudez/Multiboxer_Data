@@ -22,11 +22,46 @@ function Data:OnEnable()
 
     self:RegisterEvent('BAG_UPDATE')
     self:RegisterEvent('PLAYER_MONEY')
-
+    
+    -- Bag updating
     self:ScheduleRepeatingTimer('CheckInventory', 2)
 
+    -- Mail Hooks
     self:RawHook('SendMail', self.CheckSendMail, true)
     self:RawHook('AutoLootMailItem', self.CheckAutoLootMailItem, true)
+    self:RawHook('TakeInboxItem', self.CheckTakeInboxItem, true)
+end
+
+function Data:InitDatabase()
+    if not Multiboxer_DataDB or type(Multiboxer_DataDB) ~= 'table' then
+        Multiboxer_DataDB = {}
+    end
+    self.db = Multiboxer_DataDB
+
+    self.charLevel = UnitLevel('player')
+    self.charName = UnitName('player')
+    self.realmName = GetRealmName()
+    self.fullName = self.charName .. '-' .. self.realmName
+
+    -- db schema
+    self.db.charData = self.db.charData or {}
+    self.charDB = self.db.charData[self.fullName] or {}
+    
+    self.db.realmData = self.db.realmData or {}
+    self.realmData = self.db.realmData[self.realmName] or {}
+    self.db.realmData[self.realmName] = self.realmData
+
+    self.itemData = self.realmData.itemData or {}
+    self.realmData.itemData = self.itemData
+
+    self.mailData = self.realmData.mailData or {}
+    self.realmData.mailData = self.mailData
+    self.mailData.sentMails = self.mailData.sentMails or {}
+    self.mailData.openedMails = self.mailData.openedMails or {}
+
+    -- tracking data
+    self.itemIDs = self.itemIDs or {}
+    self.professionData = self.professionData or {}
 end
 
 
@@ -79,38 +114,6 @@ end
 -- ============================================================================
 -- Character Profession Data
 -- ============================================================================
-
-function Data:InitDatabase()
-    if not Multiboxer_DataDB or type(Multiboxer_DataDB) ~= 'table' then
-        Multiboxer_DataDB = {}
-    end
-    self.db = Multiboxer_DataDB
-
-    self.charLevel = UnitLevel('player')
-    self.charName = UnitName('player')
-    self.realmName = GetRealmName()
-    self.fullName = self.charName .. '-' .. self.realmName
-
-    -- db schema
-    self.db.charData = self.db.charData or {}
-    self.charDB = self.db.charData[self.fullName] or {}
-    
-    self.db.realmData = self.db.realmData or {}
-    self.realmData = self.db.realmData[self.realmName] or {}
-    self.db.realmData[self.realmName] = self.realmData
-
-    self.itemData = self.realmData.itemData or {}
-    self.realmData.itemData = self.itemData
-
-    self.mailData = self.realmData.mailData or {}
-    self.realmData.mailData = self.mailData
-    self.mailData.sentMails = self.mailData.sentMails or {}
-    self.mailData.openedMails = self.mailData.openedMails or {}
-
-    -- tracking data
-    self.itemIDs = self.itemIDs or {}
-    self.professionData = self.professionData or {}
-end
 
 function Data:InitCharDB()
     -- profession info is relevant for level 111+ chars only
@@ -216,41 +219,101 @@ function Data:CheckInventory()
 end
 
 function Data.CheckSendMail(target, subject, body)
-    local mailInfo = {}
-
-    local sentItems = {}
+    local attachedItems = {}
     for i = 1, 12 do
-        local itemName, itemID, _, count = GetSendMailItem(i)
+        local _,itemID,_,count = GetSendMailItem(i)
         if Data.itemIDs[itemID] then
-            sentItems[itemID] = sentItems[itemID] or 0
-            sentItems[itemID] = sentItems[itemID] + count
+            attachedItems[itemID] = attachedItems[itemID] or 0
+            attachedItems[itemID] = attachedItems[itemID] + count
         end
     end
-    table.foreach(sentItems, print)
-    print(#sentItems)
-    -- don't store info about this mail
-    if not next(sentItems) then 
+
+    -- No tracked items sent, don't store this mail
+    if not next(attachedItems) then 
         print('nothing important sent')
         Data.hooks.SendMail(target, subject, body)
         return
     end
-    mailInfo.sentItems = sentItems
-    mailInfo.timestamp = time()
-    mailInfo.target = target -- TODO strip realm name
+    
+    -- add mail to db
+    local mailInfo = {}
     mailInfo.sender = Data.charName
+    mailInfo.target = strmatch(target, '%a+') -- strip realm name
+    mailInfo.sent = time()
+    mailInfo.attachedItems = attachedItems
+    local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.sent)
+    Data.mailData.sentMails[hashKey] = mailInfo
 
-    Data:AddMailEntry(mailInfo)
-
-    -- actually send the mail after we're done
-    Data.hooks.SendMail(target, subject, body)
+    -- we're done, call the original function
+    Data.hooks.SendMail(target, mailInfo.sent, body)
 end
 
-function Data.CheckAutoLootMailItem()
+function Data.CheckAutoLootMailItem(index)
+    local _,_,sender,subject = GetInboxHeaderInfo(index)
+    local _,_,_,_,isInvoice = GetInboxText(index)
+    local timestamp = tonumber(subject)
 
+    if isInvoice or not timestamp or timestamp > time() then
+        Data.hooks.AutoLootMailItem(index)
+        return
+    end
+
+    local attachedItems = {}
+    for i = 1, 12 do
+        local _,itemID,_,count = GetInboxItem(index, i)
+        if Data.itemIDs[itemID] then
+            attachedItems[itemID] = attachedItems[itemID] or 0
+            attachedItems[itemID] = attachedItems[itemID] + count
+        end
+    end
+    table.foreach(attachedItems, print)
+
+    -- add mail to db
+    local mailInfo = {}
+    mailInfo.sender = strmatch(sender, '%a+') -- strip realm name 
+    mailInfo.target = Data.charName
+    mailInfo.sent = timestamp
+    mailInfo.opened = time()
+    mailInfo.attachedItems = attachedItems
+    table.foreach(mailInfo, print)
+    local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.sent)
+    Data.mailData.openedMails[hashKey] = mailInfo
+
+    -- we're done, call the original function
+    Data.hooks.AutoLootMailItem(index)
 end
 
-function Data:AddMailEntry(mailInfo)
-    local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.timestamp)
-    print(hashKey)
-    self.mailData.sentMails[hashKey]  = mailInfo
+function Data.CheckTakeInboxItem(index, itemIndex)
+    local _,_,sender,subject = GetInboxHeaderInfo(index)
+    local _,_,_,_,isInvoice = GetInboxText(index)
+    local timestamp = tonumber(subject)
+
+    if isInvoice or not timestamp or timestamp > time() then
+        Data.hooks.TakeInboxItem(index, itemIndex)
+        return
+    end
+    
+    -- attached item
+    local _,itemID,_,count = GetInboxItem(index, itemIndex)
+
+    local mailInfo = {}
+    mailInfo.sender = strmatch(sender, '%a+') -- strip realm name 
+    mailInfo.target = Data.charName
+    mailInfo.sent = timestamp
+    mailInfo.opened = time()
+    mailInfo.attachedItems = {[itemID] = count}
+    local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.sent)
+
+    -- add mail to db
+    if not Data.mailData.openedMails[hashKey] then
+        Data.mailData.openedMails[hashKey] = mailInfo
+    else -- if mail already in db
+        local openedMail = Data.mailData.openedMails[hashKey]
+        openedMail.opened = mailInfo.opened
+        openedMail.attachedItems[itemID] = openedMail.attachedItems[itemID] or 0
+        openedMail.attachedItems[itemID] = openedMail.attachedItems[itemID] + count
+    end
+
+    -- we're done, call the original function
+    Data.hooks.TakeInboxItem(index, itemIndex)
 end
