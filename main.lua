@@ -7,6 +7,10 @@ _G[addonName] = Data
 local StdUi = LibStub('StdUi')
 
 
+-- ============================================================================
+-- Addon Initialization
+-- ============================================================================
+
 function Data:OnInitialize()
     self:InitDatabase()
 end
@@ -21,8 +25,14 @@ function Data:OnEnable()
 
     self:ScheduleRepeatingTimer('CheckInventory', 2)
 
-    self:RawHook('SendMail', self.SendMailCheck, true)
+    self:RawHook('SendMail', self.CheckSendMail, true)
+    self:RawHook('AutoLootMailItem', self.CheckAutoLootMailItem, true)
 end
+
+
+-- ============================================================================
+-- Event Handlers
+-- ============================================================================
 
 function Data:PLAYER_ENTERING_WORLD()
     if not self.initialised then  
@@ -31,7 +41,7 @@ function Data:PLAYER_ENTERING_WORLD()
     self.initialised = true
 end
 
--- handless skill rating increases
+-- used for skill rating increases in professions
 function Data:CONSOLE_MESSAGE(event, message)
     if strfind(message, 'Skill') then
         local _,skillLine,_,_,_,_,newRating = strsplit(' ', message)
@@ -43,11 +53,11 @@ function Data:CONSOLE_MESSAGE(event, message)
     end
 end
 
--- handles learning new professions and or recipes
+-- used for updating professions and recipe ranks
 function Data:CHAT_MSG_SYSTEM(event, message)
     for professionName, professionData in pairs(self.professionData) do
         if strfind(message, professionName) then
-            self:SetProfessions()
+            self:SetProfessionInfo()
         end
         for recipeName, _ in pairs(professionData.recipes) do
             if strfind(message, recipeName) then
@@ -62,9 +72,13 @@ function Data:BAG_UPDATE(bagID)
 end
 
 function Data:PLAYER_MONEY()
-
+    -- TODO
 end
 
+
+-- ============================================================================
+-- Character Profession Data
+-- ============================================================================
 
 function Data:InitDatabase()
     if not Multiboxer_DataDB or type(Multiboxer_DataDB) ~= 'table' then
@@ -81,6 +95,7 @@ function Data:InitDatabase()
     self.db.charData = self.db.charData or {}
     self.charDB = self.db.charData[self.fullName] or {}
     
+    self.db.realmData = self.db.realmData or {}
     self.realmData = self.db.realmData[self.realmName] or {}
     self.db.realmData[self.realmName] = self.realmData
 
@@ -107,7 +122,7 @@ function Data:InitCharDB()
     end
     -- professions and ratings
     if not self.charDB.professions then
-        self:SetProfessions()
+        self:SetProfessionInfo()
     end
     -- recipe ranks
     if not self.charDB.recipeRanks then
@@ -117,7 +132,7 @@ function Data:InitCharDB()
     self.db.charData[self.fullName] = self.charDB
 end
 
-function Data:SetProfessions()
+function Data:SetProfessionInfo()
     self.charDB.professions = {}
     local prof1, prof2 = GetProfessions()
     for _, tabIndex in ipairs({prof1, prof2}) do
@@ -179,6 +194,10 @@ function Data:SetRecipeRanks(profession)
 end
 
 
+-- ============================================================================
+-- Mail and Inventory
+-- ============================================================================
+
 function Data:CheckInventory()
     if not self.bagEvent then return end
     self.bagEvent = false
@@ -196,13 +215,13 @@ function Data:CheckInventory()
     end
 end
 
-function Data.SendMailCheck(target, subject, body)
+function Data.CheckSendMail(target, subject, body)
     local mailInfo = {}
 
     local sentItems = {}
     for i = 1, 12 do
         local itemName, itemID, _, count = GetSendMailItem(i)
-        if Data.trackedItems[itemID] then
+        if Data.itemIDs[itemID] then
             sentItems[itemID] = sentItems[itemID] or 0
             sentItems[itemID] = sentItems[itemID] + count
         end
@@ -217,19 +236,21 @@ function Data.SendMailCheck(target, subject, body)
     end
     mailInfo.sentItems = sentItems
     mailInfo.timestamp = time()
-    mailInfo.target = target
+    mailInfo.target = target -- TODO strip realm name
+    mailInfo.sender = Data.charName
 
     Data:AddMailEntry(mailInfo)
 
+    -- actually send the mail after we're done
     Data.hooks.SendMail(target, subject, body)
 end
 
-function Data:AddMailEntry(mailInfo)
-    tinsert(self.charDB, mailInfo)
+function Data.CheckAutoLootMailItem()
 
-    if not self.db[self.profileName] then
-        self.db[self.profileName] = self.charDB
-    end
 end
 
-
+function Data:AddMailEntry(mailInfo)
+    local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.timestamp)
+    print(hashKey)
+    self.mailData.sentMails[hashKey]  = mailInfo
+end
