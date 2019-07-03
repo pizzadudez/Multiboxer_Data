@@ -104,7 +104,6 @@ end
 
 function Data:BAG_UPDATE(bagID)
     self.bagEvent = true
-    print('bag event')
 end
 
 function Data:PLAYER_MONEY()
@@ -218,7 +217,7 @@ function Data:CheckInventory()
     if not next(charItemData) then
         charItemData = nil
     end
-        
+
     self.itemData[self.fullName] = charItemData
 end
 
@@ -233,8 +232,7 @@ function Data.CheckSendMail(target, subject, body)
     end
 
     -- No tracked items sent, don't store this mail
-    if not next(attachedItems) then 
-        print('nothing important sent')
+    if not next(attachedItems) then
         Data.hooks.SendMail(target, subject, body)
         return
     end
@@ -270,7 +268,6 @@ function Data.CheckAutoLootMailItem(index)
             attachedItems[itemID] = attachedItems[itemID] + count
         end
     end
-    table.foreach(attachedItems, print)
 
     -- add mail to db
     local mailInfo = {}
@@ -279,7 +276,6 @@ function Data.CheckAutoLootMailItem(index)
     mailInfo.sent = timestamp
     mailInfo.opened = time()
     mailInfo.attachedItems = attachedItems
-    table.foreach(mailInfo, print)
     local hashKey = strjoin('_', mailInfo.target, mailInfo.sender, mailInfo.sent)
     Data.mailData.openedMails[hashKey] = mailInfo
 
