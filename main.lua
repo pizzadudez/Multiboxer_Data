@@ -104,6 +104,7 @@ end
 
 function Data:BAG_UPDATE(bagID)
     self.bagEvent = true
+    print('bag event')
 end
 
 function Data:PLAYER_MONEY()
@@ -149,7 +150,7 @@ function Data:SetProfessionInfo()
     end
 end
 
--- Use without parameter to initiate an all profession check
+-- Use without parameter to check all tracked professions
 function Data:SetRecipeRanks(profession)  
     -- checks recipe ranks for next profession in list
     local function SetNextProfessionRecipeRanks()
@@ -211,11 +212,14 @@ function Data:CheckInventory()
         if itemCount > 0 then
             charItemData[itemID] = itemCount
         end
-    end 
-    
-    if next(charItemData) then
-        self.itemData[self.fullName] = charItemData
     end
+
+    -- set itemData to nil instead of {}
+    if not next(charItemData) then
+        charItemData = nil
+    end
+        
+    self.itemData[self.fullName] = charItemData
 end
 
 function Data.CheckSendMail(target, subject, body)
