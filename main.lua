@@ -20,11 +20,14 @@ function Data:OnEnable()
     self:RegisterEvent('CONSOLE_MESSAGE')
     self:RegisterEvent('CHAT_MSG_SYSTEM')
 
+    -- Bag + Bank Inventory
     self:RegisterEvent('BAG_UPDATE')
     self:RegisterEvent('PLAYER_MONEY')
-    
-    -- Bag updating
     self:ScheduleRepeatingTimer('CheckInventory', 2)
+
+    -- AH Inventory
+    self:RegisterEvent('AUCTION_HOUSE_SHOW')
+    self:RegisterEvent('AUCTION_HOUSE_CLOSED')
 
     -- Mail Hooks
     self:RawHook('SendMail', self.CheckSendMail, true)
@@ -39,6 +42,7 @@ function Data:InitDatabase()
     self.db = Multiboxer_DataDB
 
     self.charLevel = UnitLevel('player')
+    self.charClass = UnitClass('player')
     self.charName = UnitName('player')
     self.realmName = GetRealmName()
     self.fullName = self.charName .. '-' .. self.realmName
@@ -51,13 +55,18 @@ function Data:InitDatabase()
     self.realmData = self.db.realmData[self.realmName] or {}
     self.db.realmData[self.realmName] = self.realmData
 
-    self.itemData = self.realmData.itemData or {}
-    self.realmData.itemData = self.itemData
+    self.inventoryData = self.realmData.inventoryData or {}
+    self.realmData.inventoryData = self.inventoryData
+
+    self.auctionData = self.realmData.auctionData or {}
+    self.realmData.auctionData = self.auctionData
 
     self.mailData = self.realmData.mailData or {}
     self.realmData.mailData = self.mailData
     self.mailData.sentMails = self.mailData.sentMails or {}
     self.mailData.openedMails = self.mailData.openedMails or {}
+
+    
 
     -- tracking data
     self.itemIDs = self.itemIDs or {}
@@ -82,7 +91,8 @@ function Data:CONSOLE_MESSAGE(event, message)
         local _,skillLine,_,_,_,_,newRating = strsplit(' ', message)
         skillLine = tonumber(skillLine)
         newRating = tonumber(newRating)
-        if self.charDB.professions[skillLine] then
+        if self.charDB.professions[skillLine] and type(self.charDB.professions[skillLine]) == number then
+            print(skillLine .. ' increased to ' .. newRating)
             self.charDB.professions[skillLine] = newRating
         end
     end
@@ -102,12 +112,48 @@ function Data:CHAT_MSG_SYSTEM(event, message)
     end
 end
 
+-- used to detect if maxRidingSkill changed
+function Data:ACHIEVEMENT_EARNED(event, achievementID)
+    print(achievementID)
+    if achievementID == 5180 then
+        self.charDB.maxRidingSkill = true
+        self:UnregisterEvent('ACHIEVEMENT_EARNED')
+    end
+end
+
 function Data:BAG_UPDATE(bagID)
-    self.bagEvent = true
+    self.checkBags = true
 end
 
 function Data:PLAYER_MONEY()
     -- TODO
+end
+
+function Data:AUCTION_HOUSE_SHOW()
+    self:RegisterEvent('AUCTION_OWNED_LIST_UPDATE')
+    self:RegisterEvent('AUCTION_MULTISELL_UPDATE')
+    self.checkAHTimer = self:ScheduleRepeatingTimer('CheckAH', 1)
+end
+
+function Data:AUCTION_HOUSE_CLOSED()
+    self:UnregisterEvent('AUCTION_OWNED_LIST_UPDATE')
+    self:UnregisterEvent('AUCTION_MULTISELL_UPDATE')
+    self:CancelTimer(self.checkAHTimer)
+end
+
+function Data:AUCTION_OWNED_LIST_UPDATE()
+    print('owned_list_update')
+    self.checkAH = true
+end
+
+function Data:AUCTION_MULTISELL_UPDATE(event, postedCount, postTotal)
+    print(postedCount)
+    if postedCount == postTotal then
+        -- manually refresh owned auctions list
+        C_Timer.After(0.5, function()
+            GetOwnerAuctionItems()
+        end)
+    end
 end
 
 
@@ -118,6 +164,13 @@ end
 function Data:InitCharDB()
     -- profession info is relevant for level 111+ chars only
     if self.charLevel < 111 then return end
+
+    -- misc stuff
+    self.charDB.class = self.charClass
+    self.charDB.maxRidingSkill = IsSpellKnown(90265)
+    if not self.charDB.maxRidingSkill then
+        self:RegisterEvent('ACHIEVEMENT_EARNED')
+    end
     
     -- nazjatar intro completed
     if not self.charDB.introCompleted then
@@ -131,6 +184,7 @@ function Data:InitCharDB()
     if not self.charDB.recipeRanks then
         self:SetRecipeRanks() -- no param to start the chain
     end
+    
     -- add profile to db
     self.db.charData[self.fullName] = self.charDB
 end
@@ -198,27 +252,50 @@ end
 
 
 -- ============================================================================
--- Mail and Inventory
+-- Mail, Inventory and AH
 -- ============================================================================
 
 function Data:CheckInventory()
-    if not self.bagEvent then return end
-    self.bagEvent = false
+    if not self.checkBags then return end
+    self.checkBags = false
 
-    local charItemData = {}
+    local charInvData = {}
     for itemID, _ in pairs(self.itemIDs) do
         local itemCount = GetItemCount(itemID, true)
         if itemCount > 0 then
-            charItemData[itemID] = itemCount
+            charInvData[itemID] = itemCount
         end
     end
 
     -- set itemData to nil instead of {}
-    if not next(charItemData) then
-        charItemData = nil
+    if not next(charInvData) then
+        charInvData = nil
     end
 
-    self.itemData[self.fullName] = charItemData
+    self.inventoryData[self.fullName] = charInvData
+end
+
+function Data:CheckAH()
+    if not self.checkAH then return end
+    self.checkAH = false
+
+    local charAucData = {}
+    local _, numAuctions = GetNumAuctionItems('owner')
+    
+    for i = 1, numAuctions do
+        local itemID = select(17, GetAuctionItemInfo('owner', i))
+        if self.itemIDs[itemID] then  
+            local count = select(3, GetAuctionItemInfo('owner', i))
+            charAucData[itemID] = charAucData[itemID] or 0
+            charAucData[itemID] = charAucData[itemID] + count
+        end
+    end
+
+    if not next(charAucData) then
+        charAucData = nil
+    end
+
+    self.auctionData[self.fullName] = charAucData
 end
 
 function Data.CheckSendMail(target, subject, body)

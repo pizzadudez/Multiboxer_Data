@@ -4,7 +4,6 @@ addonTable[1].itemIDs = {
     [168487] = true, -- zin'anthid
     [168185] = true, -- osmenite
     [2589] = true, -- DEBUG linen
-    [124437] = true, -- shald silk
 }
 
 addonTable[1].professionData = {
