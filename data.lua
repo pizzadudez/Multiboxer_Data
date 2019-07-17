@@ -3,7 +3,6 @@ local addonName, addonTable = ...
 addonTable[1].itemIDs = {
     [168487] = true, -- zin'anthid
     [168185] = true, -- osmenite
-    [2589] = true, -- DEBUG linen
 }
 
 addonTable[1].professionData = {

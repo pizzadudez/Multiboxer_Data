@@ -50,23 +50,21 @@ function Data:InitDatabase()
     -- db schema
     self.db.charData = self.db.charData or {}
     self.charDB = self.db.charData[self.fullName] or {}
-    
+    -- realm wrapper
     self.db.realmData = self.db.realmData or {}
     self.realmData = self.db.realmData[self.realmName] or {}
     self.db.realmData[self.realmName] = self.realmData
-
+    -- inventory
     self.inventoryData = self.realmData.inventoryData or {}
     self.realmData.inventoryData = self.inventoryData
-
+    -- auctions
     self.auctionData = self.realmData.auctionData or {}
     self.realmData.auctionData = self.auctionData
-
+    -- mail
     self.mailData = self.realmData.mailData or {}
     self.realmData.mailData = self.mailData
     self.mailData.sentMails = self.mailData.sentMails or {}
     self.mailData.openedMails = self.mailData.openedMails or {}
-
-    
 
     -- tracking data
     self.itemIDs = self.itemIDs or {}
@@ -150,7 +148,7 @@ function Data:AUCTION_MULTISELL_UPDATE(event, postedCount, postTotal)
     print(postedCount)
     if postedCount == postTotal then
         -- manually refresh owned auctions list
-        C_Timer.After(0.5, function()
+        C_Timer.After(1, function()
             GetOwnerAuctionItems()
         end)
     end
