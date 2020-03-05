@@ -125,31 +125,33 @@ end
 
 function Data:PLAYER_MONEY()
     -- TODO
+    self.moneyChange = true
 end
 
 function Data:AUCTION_HOUSE_SHOW()
-    self:RegisterEvent('AUCTION_OWNED_LIST_UPDATE')
-    self:RegisterEvent('AUCTION_MULTISELL_UPDATE')
+    self:RegisterEvent('OWNED_AUCTIONS_UPDATED')
+    self:RegisterEvent('COMMODITY_SEARCH_RESULTS_UPDATED')
     self.checkAHTimer = self:ScheduleRepeatingTimer('CheckAH', 1)
 end
 
 function Data:AUCTION_HOUSE_CLOSED()
-    self:UnregisterEvent('AUCTION_OWNED_LIST_UPDATE')
-    self:UnregisterEvent('AUCTION_MULTISELL_UPDATE')
+    self:UnregisterEvent('OWNED_AUCTIONS_UPDATED')
+    self:UnregisterEvent('COMMODITY_SEARCH_RESULTS_UPDATED')
     self:CancelTimer(self.checkAHTimer)
 end
 
-function Data:AUCTION_OWNED_LIST_UPDATE()
+function Data:OWNED_AUCTIONS_UPDATED()
     print('owned_list_update')
     self.checkAH = true
 end
 
-function Data:AUCTION_MULTISELL_UPDATE(event, postedCount, postTotal)
-    print(postedCount)
-    if postedCount == postTotal then
-        -- manually refresh owned auctions list
-        C_Timer.After(1, function()
-            GetOwnerAuctionItems()
+function Data:COMMODITY_SEARCH_RESULTS_UPDATED()
+    -- manually refresh owned auctions list
+    if self.moneyChange then
+        self.moneyChange = false
+        print('refresh')
+        C_Timer.After(0.25, function()
+            C_AuctionHouse.QueryOwnedAuctions({})
         end)
     end
 end
@@ -278,12 +280,14 @@ function Data:CheckAH()
     self.checkAH = false
 
     local charAucData = {}
-    local _, numAuctions = GetNumAuctionItems('owner')
+    local numAuctions = C_AuctionHouse.GetNumOwnedAuctions()
     
     for i = 1, numAuctions do
-        local itemID = select(17, GetAuctionItemInfo('owner', i))
-        if self.itemIDs[itemID] then  
-            local count = select(3, GetAuctionItemInfo('owner', i))
+        local auc = C_AuctionHouse.GetOwnedAuctionInfo(i)
+        local itemID = auc.itemKey.itemID
+        local isSold = auc.status == 1
+        if self.itemIDs[itemID] and not isSold then
+            local count = auc.quantity
             charAucData[itemID] = charAucData[itemID] or 0
             charAucData[itemID] = charAucData[itemID] + count
         end
