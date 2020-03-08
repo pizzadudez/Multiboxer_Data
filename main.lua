@@ -131,29 +131,43 @@ end
 function Data:AUCTION_HOUSE_SHOW()
     self:RegisterEvent('OWNED_AUCTIONS_UPDATED')
     self:RegisterEvent('COMMODITY_SEARCH_RESULTS_UPDATED')
+    self:RegisterEvent('AUCTION_HOUSE_AUCTION_CREATED')
     self.checkAHTimer = self:ScheduleRepeatingTimer('CheckAH', 1)
 end
 
 function Data:AUCTION_HOUSE_CLOSED()
     self:UnregisterEvent('OWNED_AUCTIONS_UPDATED')
     self:UnregisterEvent('COMMODITY_SEARCH_RESULTS_UPDATED')
+    self:UnregisterEvent('AUCTION_HOUSE_AUCTION_CREATED')
     self:CancelTimer(self.checkAHTimer)
 end
 
 function Data:OWNED_AUCTIONS_UPDATED()
-    print('owned_list_update')
+    self.lastOwnedAuctionsUpdate = GetTime()
     self.checkAH = true
+    print('M_Data: updated')
+end
+
+-- Manually refresh owned auc list if not refreshed by the server
+-- after posting auctions
+function Data:AUCTION_HOUSE_AUCTION_CREATED()
+    C_Timer.After(0.5, function()
+        if not self.lastOwnedAuctionsUpdate or 
+        (GetTime() - self.lastOwnedAuctionsUpdate > 0.5) then
+            C_AuctionHouse.QueryOwnedAuctions({})
+        end
+    end)
 end
 
 function Data:COMMODITY_SEARCH_RESULTS_UPDATED()
-    -- manually refresh owned auctions list
-    if self.moneyChange then
-        self.moneyChange = false
-        print('refresh')
-        C_Timer.After(0.25, function()
-            C_AuctionHouse.QueryOwnedAuctions({})
-        end)
-    end
+    -- -- manually refresh owned auctions list
+    -- if self.moneyChange then
+    --     self.moneyChange = false
+    --     print('refresh')
+    --     C_Timer.After(0.25, function()
+    --         C_AuctionHouse.QueryOwnedAuctions({})
+    --     end)
+    -- end
 end
 
 
