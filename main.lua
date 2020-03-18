@@ -60,6 +60,9 @@ function Data:InitDatabase()
     -- auctions
     self.auctionData = self.realmData.auctionData or {}
     self.realmData.auctionData = self.auctionData
+    -- auction IDs (for myAH) (8.3 API changes)
+    self.auctionIds = self.realmData.auctionIds or {}
+    self.realmData.auctionIds = self.auctionIds
     -- mail
     self.mailData = self.realmData.mailData or {}
     self.realmData.mailData = self.mailData
@@ -294,16 +297,19 @@ function Data:CheckAH()
     self.checkAH = false
 
     local charAucData = {}
+    local charAucIds = {}
     local numAuctions = C_AuctionHouse.GetNumOwnedAuctions()
     
     for i = 1, numAuctions do
         local auc = C_AuctionHouse.GetOwnedAuctionInfo(i)
         local itemID = auc.itemKey.itemID
+        local auctionID = auc.auctionID
         local isSold = auc.status == 1
         if self.itemIDs[itemID] and not isSold then
             local count = auc.quantity
             charAucData[itemID] = charAucData[itemID] or 0
             charAucData[itemID] = charAucData[itemID] + count
+            tinsert(charAucIds, auctionID)
         end
     end
 
@@ -312,6 +318,12 @@ function Data:CheckAH()
     end
 
     self.auctionData[self.fullName] = charAucData
+
+    if not next(charAucIds) then
+        charAucIds = nil
+    end
+
+    self.auctionIds[self.fullName] = charAucIds
 end
 
 function Data.CheckSendMail(target, subject, body)
