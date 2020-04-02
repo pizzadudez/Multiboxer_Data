@@ -122,6 +122,14 @@ function Data:ACHIEVEMENT_EARNED(event, achievementID)
     end
 end
 
+function Data:TRADE_SKILL_SHOW()
+    self.TradeSkillWindowOpen = true
+end
+
+function Data:TRADE_SKILL_CLOSE()
+    self.TradeSkillWindowOpen = false
+end
+
 function Data:BAG_UPDATE(bagID)
     self.checkBags = true
 end
@@ -226,8 +234,15 @@ function Data:SetRecipeRanks(profession)
     local function SetNextProfessionRecipeRanks()
         if next(self.professionsToCheck) then
             local professionName = tremove(self.professionsToCheck)
-            C_TradeSkillUI.OpenTradeSkill(self.professionData[professionName].skillLines.main)
-            C_Timer.After(0.1, function() self:SetRecipeRanks(professionName) end)
+            
+            self.checkProfession = professionName
+            self:OpenTradeSkill(self.professionData[professionName].skillLines.main)
+
+            -- C_Timer.After(0.5, function()
+            --     if self.TradeSkillWindowOpen then
+            --         
+            --     else 
+            -- end)
         end
     end
 
@@ -263,10 +278,30 @@ function Data:SetRecipeRanks(profession)
         print(recipeName, recipeRank)
     end
     -- close window and check next profession
-    C_TradeSkillUI.CloseTradeSkill()
+    self:CloseTradeSkill()
     SetNextProfessionRecipeRanks()
 end
 
+function Data:OpenTradeSkill(id)
+    self.TradeSkillWindowOpen = false
+    self:RegisterEvent('TRADE_SKILL_SHOW')
+    self:RegisterEvent('TRADE_SKILL_SHOW')
+    C_TradeSkillUI.OpenTradeSkill(id)
+    C_Timer.After(0.5, function() 
+        if not self.TradeSkillWindowOpen then
+            self:OpenTradeSkill(id)
+        elseif self.checkProfession then
+            self:SetRecipeRanks(self.checkProfession)
+            self.checkProfession = nil
+        end
+    end)
+end
+
+function Data:CloseTradeSkill()
+    C_TradeSkillUI.CloseTradeSkill()
+    self:UnregisterEvent('TRADE_SKILL_SHOW')
+    self:UnregisterEvent('TRADE_SKILL_SHOW')
+end
 
 -- ============================================================================
 -- Mail, Inventory and AH
